@@ -9,17 +9,17 @@ BUFFER_SIZE = 1024
 
 def main():
     client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client.settimeout(5)  # tempo limite de 5 segundos para receber algo
 
-    escolha = input("Escolha 1 para o arquivo de 32MB, e 2 para arquivo de 50MB: ")
+    escolha = input("Escolha 1 para o arquivo de 32MB, e 2 para arquivo de 9MB: ")
     escolha = int(escolha)
-    parte_a_corromper = input("Me passe a parte que deseja corromper: ")
+    parte_a_corromper = input("Packet loss? ")
     if escolha == 1:
         file_request = "GET /foto1"
     elif escolha == 2:
         file_request = "GET /foto2"
     else:
-        print("Escolha inválida!")
-        return
+        file_request = "GET /inexistente"
     
     partes_descartadas = []
     while True:
@@ -27,7 +27,21 @@ def main():
         partes = []
         i = 0
         while True:
-            data, _ = client.recvfrom(BUFFER_SIZE)
+            try:
+                data, _ = client.recvfrom(BUFFER_SIZE)
+            except socket.timeout:
+                print("Tempo limite excedido esperando resposta do servidor.")
+                client.close()
+                return
+            
+            #data, _ = client.recvfrom(BUFFER_SIZE)
+
+            mensagem_texto = data.decode(errors="ignore")
+            if mensagem_texto.startswith("ERRO"):
+                print("Erro recebido do servidor:", mensagem_texto)
+                client.close()
+                return
+        
             if data.decode() == "END":
                 if len(partes_descartadas) > 0:
                     print("Solicitando reenvio de partes:", partes_descartadas)
@@ -62,6 +76,13 @@ def main():
                 partes.append(parte)
             i += 1
 def recuperaPartes(client: socket.socket, partes_descartadas: list, partes: list):
+        try:
+            mensagem, _ = client.recvfrom(BUFFER_SIZE)
+        except socket.timeout:
+            print("Tempo limite excedido esperando resposta do servidor.")
+            client.close()
+            return
+        
         mensagem, _ = client.recvfrom(BUFFER_SIZE)
         partes_split = mensagem.split(b"#")
         client.close()
